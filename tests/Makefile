@@ -206,7 +206,7 @@ paramgrill : LDLIBS += -lm
 paramgrill : $(ZSTD_FILES) $(PRGDIR)/util.c $(PRGDIR)/timefn.c $(PRGDIR)/benchfn.c $(PRGDIR)/benchzstd.c $(PRGDIR)/datagen.c $(PRGDIR)/lorem.c paramgrill.c
 
 CLEAN += datagen
-datagen : $(PRGDIR)/datagen.c datagencli.c
+datagen : $(PRGDIR)/datagen.c $(PRGDIR)/lorem.c loremOut.c datagencli.c
 	$(LINK.c) $^ -o $@$(EXT)
 
 CLEAN += roundTripCrash
@@ -314,7 +314,7 @@ check: shortest
 fuzztest: test-fuzzer test-zstream test-decodecorpus
 
 .PHONY: test
-test: test-zstd test-fullbench test-fuzzer test-zstream test-invalidDictionaries test-legacy test-decodecorpus test-cli-tests
+test: test-zstd test-cli-tests test-fullbench test-fuzzer test-zstream test-invalidDictionaries test-legacy test-decodecorpus
 ifeq ($(QEMU_SYS),)
 test: test-pool
 endif
