@@ -225,15 +225,17 @@ the last one takes effect.
     This parameter defines a loose target: compressed blocks will target this size "on average", but individual blocks can still be larger or smaller.
     Enabling this feature can decrease compression speed by up to ~10% at level 1.
     Higher levels will see smaller relative speed regression, becoming invisible at higher settings.
-* `-o FILE`:
-    save result into `FILE`.
 * `-f`, `--force`:
     disable input and output checks. Allows overwriting existing files, input
     from console, output to stdout, operating on links, block devices, etc.
     During decompression and when the output destination is stdout, pass-through
     unrecognized formats as-is.
 * `-c`, `--stdout`:
-    write to standard output (even if it is the console); keep original files unchanged.
+    write to standard output (even if it is the console); keep original files (disable `--rm`).
+* `-o FILE`:
+    save result into `FILE`.
+    Note that this operation is in conflict with `-c`.
+    If both operations are present on the command line, the last expressed one wins.
 * `--[no-]sparse`:
     enable / disable sparse FS support,
     to make files with many zeroes smaller on disk.
@@ -290,10 +292,11 @@ the last one takes effect.
 * `-h`/`-H`, `--help`:
     display help/long help and exit
 * `-V`, `--version`:
-    display version number and exit.
+    display version number and immediately exit.
+    note that, since it exits, flags specified after `-V` are effectively ignored.
     Advanced: `-vV` also displays supported formats.
     `-vvV` also displays POSIX support.
-    `-q` will only display the version number, suitable for machine reading.
+    `-qV` will only display the version number, suitable for machine reading.
 * `-v`, `--verbose`:
     verbose mode, display more information
 * `-q`, `--quiet`:
@@ -304,6 +307,8 @@ the last one takes effect.
 * `--show-default-cparams`:
     shows the default compression parameters that will be used for a particular input file, based on the provided compression level and the input size.
     If the provided file is not a regular file (e.g. a pipe), this flag will output the parameters used for inputs of unknown size.
+* `--exclude-compressed`:
+    only compress files that are not already compressed.
 * `--`:
     All arguments after `--` are treated as files
 
