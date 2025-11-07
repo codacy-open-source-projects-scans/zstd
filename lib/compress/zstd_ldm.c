@@ -16,7 +16,7 @@
 #include "zstd_double_fast.h"   /* ZSTD_fillDoubleHashTable() */
 #include "zstd_ldm_geartab.h"
 
-#define LDM_BUCKET_SIZE_LOG 3
+#define LDM_BUCKET_SIZE_LOG 4
 #define LDM_MIN_MATCH_LENGTH 64
 #define LDM_HASH_RLOG 7
 
@@ -133,21 +133,35 @@ done:
 }
 
 void ZSTD_ldm_adjustParameters(ldmParams_t* params,
-                               ZSTD_compressionParameters const* cParams)
+                        const ZSTD_compressionParameters* cParams)
 {
     params->windowLog = cParams->windowLog;
     ZSTD_STATIC_ASSERT(LDM_BUCKET_SIZE_LOG <= ZSTD_LDM_BUCKETSIZELOG_MAX);
     DEBUGLOG(4, "ZSTD_ldm_adjustParameters");
-    if (!params->bucketSizeLog) params->bucketSizeLog = LDM_BUCKET_SIZE_LOG;
-    if (!params->minMatchLength) params->minMatchLength = LDM_MIN_MATCH_LENGTH;
-    if (params->hashLog == 0) {
-        params->hashLog = MAX(ZSTD_HASHLOG_MIN, params->windowLog - LDM_HASH_RLOG);
-        assert(params->hashLog <= ZSTD_HASHLOG_MAX);
-    }
     if (params->hashRateLog == 0) {
-        params->hashRateLog = params->windowLog < params->hashLog
-                                   ? 0
-                                   : params->windowLog - params->hashLog;
+        if (params->hashLog > 0) {
+            /* if params->hashLog is set, derive hashRateLog from it */
+            assert(params->hashLog <= ZSTD_HASHLOG_MAX);
+            if (params->windowLog > params->hashLog) {
+                params->hashRateLog = params->windowLog - params->hashLog;
+            }
+        } else {
+            assert(1 <= (int)cParams->strategy && (int)cParams->strategy <= 9);
+            /* mapping from [fast, rate7] to [btultra2, rate4] */
+            params->hashRateLog = 7 - (cParams->strategy/3);
+        }
+    }
+    if (params->hashLog == 0) {
+        params->hashLog = BOUNDED(ZSTD_HASHLOG_MIN, params->windowLog - params->hashRateLog, ZSTD_HASHLOG_MAX);
+    }
+    if (params->minMatchLength == 0) {
+        params->minMatchLength = LDM_MIN_MATCH_LENGTH;
+        if (cParams->strategy >= ZSTD_btultra)
+            params->minMatchLength /= 2;
+    }
+    if (params->bucketSizeLog==0) {
+        assert(1 <= (int)cParams->strategy && (int)cParams->strategy <= 9);
+        params->bucketSizeLog = BOUNDED(LDM_BUCKET_SIZE_LOG, (U32)cParams->strategy, ZSTD_LDM_BUCKETSIZELOG_MAX);
     }
     params->bucketSizeLog = MIN(params->bucketSizeLog, params->hashLog);
 }
@@ -234,7 +248,7 @@ static size_t ZSTD_ldm_countBackwardsMatch_2segments(
  *
  *  The tables for the other strategies are filled within their
  *  block compressors. */
-static size_t ZSTD_ldm_fillFastTables(ZSTD_matchState_t* ms,
+static size_t ZSTD_ldm_fillFastTables(ZSTD_MatchState_t* ms,
                                       void const* end)
 {
     const BYTE* const iend = (const BYTE*)end;
@@ -314,7 +328,7 @@ void ZSTD_ldm_fillHashTable(
  *  Sets cctx->nextToUpdate to a position corresponding closer to anchor
  *  if it is far way
  *  (after a long match, only update tables a limited amount). */
-static void ZSTD_ldm_limitTableUpdate(ZSTD_matchState_t* ms, const BYTE* anchor)
+static void ZSTD_ldm_limitTableUpdate(ZSTD_MatchState_t* ms, const BYTE* anchor)
 {
     U32 const curr = (U32)(anchor - ms->window.base);
     if (curr > ms->nextToUpdate + 1024) {
@@ -326,7 +340,7 @@ static void ZSTD_ldm_limitTableUpdate(ZSTD_matchState_t* ms, const BYTE* anchor)
 static
 ZSTD_ALLOW_POINTER_OVERFLOW_ATTR
 size_t ZSTD_ldm_generateSequences_internal(
-        ldmState_t* ldmState, rawSeqStore_t* rawSeqStore,
+        ldmState_t* ldmState, RawSeqStore_t* rawSeqStore,
         ldmParams_t const* params, void const* src, size_t srcSize)
 {
     /* LDM parameters */
@@ -510,7 +524,7 @@ static void ZSTD_ldm_reduceTable(ldmEntry_t* const table, U32 const size,
 }
 
 size_t ZSTD_ldm_generateSequences(
-        ldmState_t* ldmState, rawSeqStore_t* sequences,
+        ldmState_t* ldmState, RawSeqStore_t* sequences,
         ldmParams_t const* params, void const* src, size_t srcSize)
 {
     U32 const maxDist = 1U << params->windowLog;
@@ -587,7 +601,7 @@ size_t ZSTD_ldm_generateSequences(
 }
 
 void
-ZSTD_ldm_skipSequences(rawSeqStore_t* rawSeqStore, size_t srcSize, U32 const minMatch)
+ZSTD_ldm_skipSequences(RawSeqStore_t* rawSeqStore, size_t srcSize, U32 const minMatch)
 {
     while (srcSize > 0 && rawSeqStore->pos < rawSeqStore->size) {
         rawSeq* seq = rawSeqStore->seq + rawSeqStore->pos;
@@ -623,7 +637,7 @@ ZSTD_ldm_skipSequences(rawSeqStore_t* rawSeqStore, size_t srcSize, U32 const min
  * Returns the current sequence to handle, or if the rest of the block should
  * be literals, it returns a sequence with offset == 0.
  */
-static rawSeq maybeSplitSequence(rawSeqStore_t* rawSeqStore,
+static rawSeq maybeSplitSequence(RawSeqStore_t* rawSeqStore,
                                  U32 const remaining, U32 const minMatch)
 {
     rawSeq sequence = rawSeqStore->seq[rawSeqStore->pos];
@@ -647,7 +661,7 @@ static rawSeq maybeSplitSequence(rawSeqStore_t* rawSeqStore,
     return sequence;
 }
 
-void ZSTD_ldm_skipRawSeqStoreBytes(rawSeqStore_t* rawSeqStore, size_t nbBytes) {
+void ZSTD_ldm_skipRawSeqStoreBytes(RawSeqStore_t* rawSeqStore, size_t nbBytes) {
     U32 currPos = (U32)(rawSeqStore->posInSequence + nbBytes);
     while (currPos && rawSeqStore->pos < rawSeqStore->size) {
         rawSeq currSeq = rawSeqStore->seq[rawSeqStore->pos];
@@ -664,14 +678,14 @@ void ZSTD_ldm_skipRawSeqStoreBytes(rawSeqStore_t* rawSeqStore, size_t nbBytes) {
     }
 }
 
-size_t ZSTD_ldm_blockCompress(rawSeqStore_t* rawSeqStore,
-    ZSTD_matchState_t* ms, seqStore_t* seqStore, U32 rep[ZSTD_REP_NUM],
-    ZSTD_paramSwitch_e useRowMatchFinder,
+size_t ZSTD_ldm_blockCompress(RawSeqStore_t* rawSeqStore,
+    ZSTD_MatchState_t* ms, SeqStore_t* seqStore, U32 rep[ZSTD_REP_NUM],
+    ZSTD_ParamSwitch_e useRowMatchFinder,
     void const* src, size_t srcSize)
 {
     const ZSTD_compressionParameters* const cParams = &ms->cParams;
     unsigned const minMatch = cParams->minMatch;
-    ZSTD_blockCompressor const blockCompressor =
+    ZSTD_BlockCompressor_f const blockCompressor =
         ZSTD_selectBlockCompressor(cParams->strategy, useRowMatchFinder, ZSTD_matchState_dictMode(ms));
     /* Input bounds */
     BYTE const* const istart = (BYTE const*)src;

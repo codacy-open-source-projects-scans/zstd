@@ -14,10 +14,6 @@
   * and display progress result and final summary
   */
 
-#if defined (__cplusplus)
-extern "C" {
-#endif
-
 #ifndef BENCH_ZSTD_H_3242387
 #define BENCH_ZSTD_H_3242387
 
@@ -25,7 +21,6 @@ extern "C" {
 #include <stddef.h>   /* size_t */
 #define ZSTD_STATIC_LINKING_ONLY   /* ZSTD_compressionParameters */
 #include "../lib/zstd.h"     /* ZSTD_compressionParameters */
-
 
 /* ===  Constants  === */
 
@@ -97,9 +92,9 @@ typedef enum {
 } BMK_mode_t;
 
 typedef struct {
-    BMK_mode_t mode;        /* 0: all, 1: compress only 2: decode only */
+    BMK_mode_t mode;        /* 0: both, 1: compress only 2: decode only */
     unsigned nbSeconds;     /* default timing is in nbSeconds */
-    size_t blockSize;       /* Maximum size of each block*/
+    size_t chunkSizeMax;    /* Maximum size of each independent chunk */
     size_t targetCBlockSize;/* Approximative size of compressed blocks */
     int nbWorkers;          /* multithreading */
     unsigned realTime;      /* real time priority */
@@ -109,7 +104,7 @@ typedef struct {
     int ldmHashLog;
     int ldmBucketSizeLog;
     int ldmHashRateLog;
-    ZSTD_paramSwitch_e literalCompressionMode;
+    ZSTD_ParamSwitch_e literalCompressionMode;
     int useRowMatchFinder;  /* use row-based matchfinder if possible */
 } BMK_advancedParams_t;
 
@@ -194,7 +189,3 @@ BMK_benchOutcome_t BMK_benchMemAdvanced(const void* srcBuffer, size_t srcSize,
 
 
 #endif   /* BENCH_ZSTD_H_3242387 */
-
-#if defined (__cplusplus)
-}
-#endif

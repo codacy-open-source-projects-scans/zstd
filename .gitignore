@@ -12,6 +12,8 @@
 *.so
 *.so.*
 *.dylib
+*.framework
+*.xcframework
 
 # Executables
 /zstd
@@ -19,16 +21,6 @@ zstdmt
 *.exe
 *.out
 *.app
-
-# Test artefacts
-tmp*
-*.zst
-*.zstd
-dictionary.
-dictionary
-NUL
-cmakebuild/
-install/
 
 # Build artefacts
 contrib/linux-kernel/linux/
@@ -38,6 +30,17 @@ bin/
 buck-out/
 build-*
 *.gcda
+cmakebuild/
+cmake-build/
+
+# Test artefacts
+tmp*
+*.zst
+*.zstd
+dictionary.
+dictionary
+NUL
+install/
 
 # IDE
 .clang_complete
